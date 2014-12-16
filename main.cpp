@@ -182,21 +182,23 @@ static void my_YCbCr_to_RGB(stbi_uc *out, stbi_uc const *y, stbi_uc const *pcb, 
    }
 
 // 8-bit interleave step (for transposes)
-#define dct_interleave8(out0,out1, in0,in1) \
-   out0 = _mm_unpacklo_epi8(in0, in1); \
-   out1 = _mm_unpackhi_epi8(in0, in1)
+#define dct_interleave8(a, b) \
+   tmp = a; \
+   a = _mm_unpacklo_epi8(a, b); \
+   b = _mm_unpackhi_epi8(tmp, b)
 
 // 16-bit interleave step (for transposes)
-#define dct_interleave16(out0,out1, in0,in1) \
-   out0 = _mm_unpacklo_epi16(in0, in1); \
-   out1 = _mm_unpackhi_epi16(in0, in1)
+#define dct_interleave16(a, b) \
+   tmp = a; \
+   a = _mm_unpacklo_epi16(a, b); \
+   b = _mm_unpackhi_epi16(tmp, b)
 
-#define dct_pass(row,bias,shift) \
+#define dct_pass(bias,shift) \
    { \
       /* even part */ \
-      dct_rot(t2e,t3e, row[2],row[6], rot0_0,rot0_1); \
-      __m128i sum04 = _mm_add_epi16(row[0], row[4]); \
-      __m128i dif04 = _mm_sub_epi16(row[0], row[4]); \
+      dct_rot(t2e,t3e, row2,row6, rot0_0,rot0_1); \
+      __m128i sum04 = _mm_add_epi16(row0, row4); \
+      __m128i dif04 = _mm_sub_epi16(row0, row4); \
       dct_widen(t0e, sum04); \
       dct_widen(t1e, dif04); \
       dct_wadd(x0, t0e, t3e); \
@@ -204,10 +206,6 @@ static void my_YCbCr_to_RGB(stbi_uc *out, stbi_uc const *y, stbi_uc const *pcb, 
       dct_wadd(x1, t1e, t2e); \
       dct_wsub(x2, t1e, t2e); \
       /* odd part */ \
-      __m128i row7 = row[7]; \
-      __m128i row5 = row[5]; \
-      __m128i row3 = row[3]; \
-      __m128i row1 = row[1]; \
       dct_rot(y0o,y2o, row7,row3, rot2_0,rot2_1); \
       dct_rot(y1o,y3o, row5,row1, rot3_0,rot3_1); \
       __m128i sum17 = _mm_add_epi16(row1, row7); \
@@ -217,10 +215,10 @@ static void my_YCbCr_to_RGB(stbi_uc *out, stbi_uc const *y, stbi_uc const *pcb, 
       dct_wadd(x5, y1o, y5o); \
       dct_wadd(x6, y2o, y5o); \
       dct_wadd(x7, y3o, y4o); \
-      dct_bfly32o(row[0],row[7], x0,x7,bias,shift); \
-      dct_bfly32o(row[1],row[6], x1,x6,bias,shift); \
-      dct_bfly32o(row[2],row[5], x2,x5,bias,shift); \
-      dct_bfly32o(row[3],row[4], x3,x4,bias,shift); \
+      dct_bfly32o(row0,row7, x0,x7,bias,shift); \
+      dct_bfly32o(row1,row6, x1,x6,bias,shift); \
+      dct_bfly32o(row2,row5, x2,x5,bias,shift); \
+      dct_bfly32o(row3,row4, x3,x4,bias,shift); \
    }
 
 static void my_IDCT(stbi_uc *out, int out_stride, short data[64], unsigned short *dequantize)
@@ -241,67 +239,73 @@ static void my_IDCT(stbi_uc *out, int out_stride, short data[64], unsigned short
    __m128i bias_0 = _mm_set1_epi32(512);
    __m128i bias_1 = _mm_set1_epi32(65536 + (128<<17));
 
-   __m128i row[8];
-   int i;
+   __m128i row0, row1, row2, row3, row4, row5, row6, row7;
+   __m128i tmp;
 
    // load
-   for (i = 0; i < 8; i++)
-      row[i] = _mm_load_si128((const __m128i *) (data + i*8));
+   row0 = _mm_load_si128((const __m128i *) (data + 0*8));
+   row1 = _mm_load_si128((const __m128i *) (data + 1*8));
+   row2 = _mm_load_si128((const __m128i *) (data + 2*8));
+   row3 = _mm_load_si128((const __m128i *) (data + 3*8));
+   row4 = _mm_load_si128((const __m128i *) (data + 4*8));
+   row5 = _mm_load_si128((const __m128i *) (data + 5*8));
+   row6 = _mm_load_si128((const __m128i *) (data + 6*8));
+   row7 = _mm_load_si128((const __m128i *) (data + 7*8));
 
    // column pass
-   dct_pass(row, bias_0, 10);
+   dct_pass(bias_0, 10);
 
    {
       // 16bit 8x8 transpose pass 1
-      dct_interleave16(__m128i a0,__m128i a4, row[0],row[4]);
-      dct_interleave16(__m128i a1,__m128i a5, row[1],row[5]);
-      dct_interleave16(__m128i a2,__m128i a6, row[2],row[6]);
-      dct_interleave16(__m128i a3,__m128i a7, row[3],row[7]);
+      dct_interleave16(row0, row4);
+      dct_interleave16(row1, row5);
+      dct_interleave16(row2, row6);
+      dct_interleave16(row3, row7);
 
       // transpose pass 2
-      dct_interleave16(__m128i b0,__m128i b2, a0,a2);
-      dct_interleave16(__m128i b1,__m128i b3, a1,a3);
-      dct_interleave16(__m128i b4,__m128i b6, a4,a6);
-      dct_interleave16(__m128i b5,__m128i b7, a5,a7);
+      dct_interleave16(row0, row2);
+      dct_interleave16(row1, row3);
+      dct_interleave16(row4, row6);
+      dct_interleave16(row5, row7);
 
       // transpose pass 3
-      dct_interleave16(row[0],row[1], b0,b1);
-      dct_interleave16(row[2],row[3], b2,b3);
-      dct_interleave16(row[4],row[5], b4,b5);
-      dct_interleave16(row[6],row[7], b6,b7);
+      dct_interleave16(row0, row1);
+      dct_interleave16(row2, row3);
+      dct_interleave16(row4, row5);
+      dct_interleave16(row6, row7);
    }
 
    // row pass
-   dct_pass(row, bias_1, 17);
+   dct_pass(bias_1, 17);
 
    {
       // pack
-      __m128i a0 = _mm_packus_epi16(row[0], row[1]); // a0a1a2a3...a7b0b1b2b3...b7
-      __m128i a1 = _mm_packus_epi16(row[2], row[3]);
-      __m128i a2 = _mm_packus_epi16(row[4], row[5]);
-      __m128i a3 = _mm_packus_epi16(row[6], row[7]);
+      __m128i p0 = _mm_packus_epi16(row0, row1); // a0a1a2a3...a7b0b1b2b3...b7
+      __m128i p1 = _mm_packus_epi16(row2, row3);
+      __m128i p2 = _mm_packus_epi16(row4, row5);
+      __m128i p3 = _mm_packus_epi16(row6, row7);
 
       // 8bit 8x8 transpose pass 1
-      dct_interleave8(__m128i b0,__m128i b2, a0,a2); // a0e0a1e1...
-      dct_interleave8(__m128i b1,__m128i b3, a1,a3); // c0g0c1g1...
+      dct_interleave8(p0, p2); // a0e0a1e1...
+      dct_interleave8(p1, p3); // c0g0c1g1...
 
       // transpose pass 2
-      dct_interleave8(__m128i c0,__m128i c1, b0,b1); // a0c0e0g0...
-      dct_interleave8(__m128i c2,__m128i c3, b2,b3); // b0d0f0h0...
+      dct_interleave8(p0, p1); // a0c0e0g0...
+      dct_interleave8(p2, p3); // b0d0f0h0...
 
       // transpose pass 3
-      dct_interleave8(__m128i d0,__m128i d2, c0,c2); // a0b0c0d0...
-      dct_interleave8(__m128i d1,__m128i d3, c1,c3); // a4b4c4d4...
+      dct_interleave8(p0, p2); // a0b0c0d0...
+      dct_interleave8(p1, p3); // a4b4c4d4...
 
       // store
-      _mm_storel_epi64((__m128i *) out, d0); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(d0, 0x4e)); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, d2); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(d2, 0x4e)); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, d1); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(d1, 0x4e)); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, d3); out += out_stride;
-      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(d3, 0x4e));
+      _mm_storel_epi64((__m128i *) out, p0); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(p0, 0x4e)); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, p2); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(p2, 0x4e)); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, p1); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(p1, 0x4e)); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, p3); out += out_stride;
+      _mm_storel_epi64((__m128i *) out, _mm_shuffle_epi32(p3, 0x4e));
    }
 }
 
