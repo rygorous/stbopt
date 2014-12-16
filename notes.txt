@@ -1,0 +1,21 @@
+png (test.png)
+==============
+
+initial:                     30 runs in 804.013 ms -> 26.800 ms/run
+improve filter:              30 runs in 684.728 ms -> 22.824 ms/run (-14.8% vs. original)
+zout in local var:           30 runs in 514.701 ms -> 17.157 ms/run (-36.0% vs. original)
+single-byte runs:            30 runs in 483.597 ms -> 16.120 ms/run (-39.9% vs. original)
+extract zhuff_dec slow path: 30 runs in 469.272 ms -> 15.642 ms/run (-41.6% vs. original)
+improve 'fast' table:        30 runs in 451.185 ms -> 15.039 ms/run (-43.9% vs. original)
+guess decoded size:          30 runs in 386.372 ms -> 12.879 ms/run (-51.9% vs. original)
+16-bit-at-a-time refill:     30 runs in 372.387 ms -> 12.413 ms/run (-53.6% vs. original)
+
+jpeg (anemones.jpg)
+===================
+
+initial:                     30 runs in 4262.197 ms -> 142.073 ms/run
+extract slow path:           30 runs in 4278.593 ms -> 142.620 ms/run
+improve 'fast' table:        30 runs in 4132.213 ms -> 137.740 ms/run
+faster extend_receive:       30 runs in 3898.069 ms -> 129.936 ms/run
+fast_ac table:               30 runs in 3727.606 ms -> 124.254 ms/run
+dequant in decode_block:     30 runs in 3689.702 ms -> 122.990 ms/run
