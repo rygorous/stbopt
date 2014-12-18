@@ -221,6 +221,11 @@ static void my_YCbCr_to_RGB(stbi_uc *out, stbi_uc const *y, stbi_uc const *pcb, 
       dct_bfly32o(row3,row4, x3,x4,bias,shift); \
    }
 
+// this is the version with dequant in IDCT
+#define dct_load(data, dequantize, row) \
+   _mm_mullo_epi16(_mm_load_si128((const __m128i *) (data + (row)*8)), \
+                   _mm_loadu_si128((const __m128i *) (dequantize + (row)*8)))
+
 static void my_IDCT(stbi_uc *out, int out_stride, short data[64], unsigned short *dequantize)
 {
    // This is constructed to match the IJG slow IDCT exactly.
@@ -243,14 +248,14 @@ static void my_IDCT(stbi_uc *out, int out_stride, short data[64], unsigned short
    __m128i tmp;
 
    // load
-   row0 = _mm_load_si128((const __m128i *) (data + 0*8));
-   row1 = _mm_load_si128((const __m128i *) (data + 1*8));
-   row2 = _mm_load_si128((const __m128i *) (data + 2*8));
-   row3 = _mm_load_si128((const __m128i *) (data + 3*8));
-   row4 = _mm_load_si128((const __m128i *) (data + 4*8));
-   row5 = _mm_load_si128((const __m128i *) (data + 5*8));
-   row6 = _mm_load_si128((const __m128i *) (data + 6*8));
-   row7 = _mm_load_si128((const __m128i *) (data + 7*8));
+   row0 = dct_load(data, dequantize, 0);
+   row1 = dct_load(data, dequantize, 1);
+   row2 = dct_load(data, dequantize, 2);
+   row3 = dct_load(data, dequantize, 3);
+   row4 = dct_load(data, dequantize, 4);
+   row5 = dct_load(data, dequantize, 5);
+   row6 = dct_load(data, dequantize, 6);
+   row7 = dct_load(data, dequantize, 7);
 
    // column pass
    dct_pass(bias_0, 10);
@@ -325,13 +330,17 @@ static void test_dct()
 {
    __declspec(align(16)) short coeffs[64];
    stbi_uc out_ref[64], out_sse[64];
+   stbi_dequantize_t dq1[64];
+
+   for (int i=0; i < 64; ++i)
+      dq1[i] = 1;
 
    for (int i=0; i < 64; ++i) {
       memset(coeffs, 0, sizeof(coeffs));
       coeffs[i] = 512;
 
-      stbi__idct_block(out_ref, 8, coeffs);
-      my_IDCT(out_sse, 8, coeffs, 0);
+      stbi__idct_block(out_ref, 8, coeffs, dq1);
+      my_IDCT(out_sse, 8, coeffs, dq1);
       if (memcmp(out_ref, out_sse, 64) != 0) {
          dct_print(out_ref, out_sse, i);
          panic("mismatch i=0%o\n", i);
