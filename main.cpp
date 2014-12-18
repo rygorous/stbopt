@@ -221,10 +221,15 @@ static void my_YCbCr_to_RGB(stbi_uc *out, stbi_uc const *y, stbi_uc const *pcb, 
       dct_bfly32o(row3,row4, x3,x4,bias,shift); \
    }
 
+#if 0
 // this is the version with dequant in IDCT
 #define dct_load(data, dequantize, row) \
    _mm_mullo_epi16(_mm_load_si128((const __m128i *) (data + (row)*8)), \
                    _mm_loadu_si128((const __m128i *) (dequantize + (row)*8)))
+#else
+#define dct_load(data, dequantize, row) \
+   _mm_load_si128((const __m128i *) (data + (row)*8))
+#endif
 
 static void my_IDCT(stbi_uc *out, int out_stride, short data[64], unsigned short *dequantize)
 {
@@ -330,7 +335,7 @@ static void test_dct()
 {
    __declspec(align(16)) short coeffs[64];
    stbi_uc out_ref[64], out_sse[64];
-   stbi_dequantize_t dq1[64];
+   unsigned short dq1[64];
 
    for (int i=0; i < 64; ++i)
       dq1[i] = 1;
@@ -339,7 +344,7 @@ static void test_dct()
       memset(coeffs, 0, sizeof(coeffs));
       coeffs[i] = 512;
 
-      stbi__idct_block(out_ref, 8, coeffs, dq1);
+      stbi__idct_block(out_ref, 8, coeffs);
       my_IDCT(out_sse, 8, coeffs, dq1);
       if (memcmp(out_ref, out_sse, 64) != 0) {
          dct_print(out_ref, out_sse, i);
