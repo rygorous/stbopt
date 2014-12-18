@@ -364,7 +364,7 @@ int main()
    //test_correct("test.png");
    //bench("test.png", 0);
 
-   stbi_install_YCbCr_to_RGB(my_YCbCr_to_RGB);
+   //stbi_install_YCbCr_to_RGB(my_YCbCr_to_RGB);
    //stbi_install_idct(my_IDCT);
 
    test_correct("anemones.jpg");
